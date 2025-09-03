@@ -16,7 +16,6 @@ from telegram import Update
 from telegram.ext import (
     Application, ApplicationBuilder, CommandHandler, ContextTypes
 )
-
 # ---------------- CONFIG ----------------
 CSV_PATH = Path("data/quiz.csv")  # Relative path
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Load from GitHub Secrets
@@ -33,6 +32,7 @@ class QuizItem:
     options: List[str]
     correct_option_id: int
     description: str | None = None
+    reference: str | None = None  # Reference column
 
 class QuestionBank:
     def __init__(self) -> None:
@@ -43,7 +43,7 @@ class QuestionBank:
             reader = csv.DictReader(f)
             required = {
                 "question_no", "question", "option1", "option2",
-                "option3", "option4", "correct_answer", "description"
+                "option3", "option4", "correct_answer", "description", "reference"
             }
             if not required.issubset(set(reader.fieldnames or [])):
                 raise ValueError(f"CSV missing columns. Required: {required}. Found: {reader.fieldnames}")
@@ -57,7 +57,7 @@ class QuestionBank:
                 ]
                 options = [opt.strip() for opt in options if opt.strip()]
                 try:
-                    cid = int(row.get("correct_answer", 1)) - 1
+                    cid = options.index(row.get("correct_answer", "").strip())
                 except Exception:
                     continue
                 if not (0 <= cid < len(options)):
@@ -69,7 +69,8 @@ class QuestionBank:
                         row["question"].strip(),
                         options,
                         cid,
-                        row.get("description") or None
+                        row.get("description") or None,
+                        row.get("reference") or None  # Load reference
                     )
                 )
         return len(self.items)
@@ -104,14 +105,20 @@ async def upload_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
         for idx, item in enumerate(batch, 1):
             try:
+                # Format question exactly as requested
+                poll_question = f"{item.question_no}) {item.question}\n\n"
+                if item.reference:
+                    poll_question += f"{item.reference}\n"
+
+                # Send poll with options (Telegram handles buttons)
                 await context.bot.send_poll(
                     chat_id=chat_id,
-                    question=f"{item.question_no}. {item.question}"[:300],
-                    options=item.options[:10],
+                    question=poll_question[:300],
+                    options=item.options[:10],  # Keep original options
                     type="quiz",
                     correct_option_id=item.correct_option_id,
                     explanation=(item.description or "")[:200],
-                    is_anonymous=False,
+                    is_anonymous=False,  # Change to True for channel posting
                 )
                 await asyncio.sleep(DELAY_BETWEEN_POLLS)
             except Exception as e:

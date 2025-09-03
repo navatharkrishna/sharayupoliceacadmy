@@ -1,6 +1,3 @@
-question_no,question,option1,option2,option3,option4,correct_answer,description
-1,What is the capital of India?,Mumbai,Delhi,Kolkata,Chennai,2,Delhi is the capital city of India.
-2,Which planet is known as the Red Planet?,Venus,Earth,Mars,Jupiter,3,Mars is called the Red Planet because of its reddish appearance.
-3,What is the largest ocean in the world?,Atlantic Ocean,Indian Ocean,Pacific Ocean,Arctic Ocean,3,The Pacific Ocean is the largest and deepest ocean.
-4,Who wrote the Indian National Anthem?,Rabindranath Tagore,Mahatma Gandhi,Bhagat Singh,Sarojini Naidu,1,Rabindranath Tagore wrote "Jana Gana Mana".
-5,Which gas do humans exhale?,Oxygen,Carbon Dioxide,Nitrogen,Hydrogen,2,Humans exhale Carbon Dioxide during respiration.
+question_no,question,option1,option2,option3,option4,correct_answer,description,reference
+1,What is the chemical symbol for water?,O2,H2O,CO2,NaCl,H2O,Water is made of two hydrogen atoms and one oxygen atom.,Vardhar Police 2023
+2,Which gas do humans need to breathe to survive?,Oxygen,Carbon dioxide,Nitrogen,Hydrogen,Oxygen,Humans require oxygen for respiration.,Vardhar Police 2023
