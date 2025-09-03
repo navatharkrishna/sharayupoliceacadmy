@@ -10,9 +10,6 @@ venv/
 .env.bak/
 *.env
 
-# Data files (optional: ignore CSV if it contains private questions)
-data/quiz.csv
-
 # System files
 .DS_Store
 Thumbs.db
@@ -20,6 +17,6 @@ Thumbs.db
 # Logs
 *.log
 
-# Secrets (store bot token separately if needed)
+# Secrets (store bot token separately)
 bot_token.txt
 config.json
