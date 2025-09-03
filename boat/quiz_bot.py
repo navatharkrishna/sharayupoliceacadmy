@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Telegram Quiz Bot — Bulk Upload All Questions from CSV (Final Fixed)
+Telegram Quiz Bot — Bulk Upload All Questions from CSV
 """
 
 import asyncio
@@ -9,6 +9,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
+import os
 import requests
 
 from telegram import Update
@@ -17,8 +18,8 @@ from telegram.ext import (
 )
 
 # ---------------- CONFIG ----------------
-CSV_PATH = Path(r"C:\Users\Krishna\Desktop\quiz.csv")
-BOT_TOKEN = "8328307788:AAE__PqHxO1zqD7Q4jc1VzFTTWD3HM8TgI8"
+CSV_PATH = Path("data/quiz.csv")  # Relative path
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Load from GitHub Secrets
 BATCH_SIZE = 100
 DELAY_BETWEEN_POLLS = 2
 DELAY_BETWEEN_BATCHES = 10
@@ -122,7 +123,6 @@ async def upload_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text("🎉 All questions uploaded successfully!")
 
 async def auto_upload_on_start(app: Application) -> None:
-    """Automatically send /uploadall to the most recent chat when the bot starts."""
     await asyncio.sleep(5)
     updates = await app.bot.get_updates()
     if updates and updates[-1].message:
@@ -135,13 +135,11 @@ async def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
-    # FIX: Pass post_init during ApplicationBuilder construction
     builder = ApplicationBuilder().token(BOT_TOKEN)
     if AUTO_UPLOAD:
         builder = builder.post_init(auto_upload_on_start)
 
     application = builder.build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("count", count))
     application.add_handler(CommandHandler("uploadall", upload_all))
@@ -154,5 +152,5 @@ if __name__ == "__main__":
         nest_asyncio.apply()
     except ImportError:
         pass
-
+    import asyncio
     asyncio.run(main())
