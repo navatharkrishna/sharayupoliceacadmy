@@ -26,6 +26,6 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
-          python bot/quiz_bot.py
+          python boat/quiz_bot.py
           
 
