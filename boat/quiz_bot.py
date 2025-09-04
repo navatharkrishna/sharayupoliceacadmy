@@ -16,12 +16,13 @@ from telegram.ext import (
 )
 
 # ---------------- CONFIG ----------------
-CSV_PATH = Path(r"C:\Users\Krishna\Desktop\PoliceAcadmy\quiz.csv")
-BOT_TOKEN = "8328307788:AAE__PqHxO1zqD7Q4jc1VzFTTWD3HM8TgI8"
+CSV_PATH = Path("data/quiz.csv")  # Relative path
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Load from GitHub Secrets
 BATCH_SIZE = 100
 DELAY_BETWEEN_POLLS = 2
 DELAY_BETWEEN_BATCHES = 10
-CHANNEL_ID = "-1002796750436"  # Replace with your channel ID
+CHANNEL_ID = os.environ.get("TELEGRAM_CHANNELID") # Replace with your channel ID
+
 # -----------------------------------------
 
 @dataclass
