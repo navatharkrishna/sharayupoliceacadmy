@@ -2,7 +2,7 @@
 """
 Telegram Quiz Bot — Bulk Upload All Questions from CSV to Group/Channel
 """
-
+import os
 import asyncio
 import csv
 import logging
