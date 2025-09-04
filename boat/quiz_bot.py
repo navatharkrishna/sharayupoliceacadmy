@@ -2,17 +2,18 @@
 """
 Telegram Quiz Bot — Bulk Upload All Questions from CSV to Group/Channel
 """
-import os
+
 import asyncio
 import csv
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+import os
 
 from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes
+    Application, ApplicationBuilder, CommandHandler, ContextTypes
 )
 
 # ---------------- CONFIG ----------------
@@ -21,8 +22,7 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Load from GitHub Secrets
 BATCH_SIZE = 100
 DELAY_BETWEEN_POLLS = 2
 DELAY_BETWEEN_BATCHES = 10
-CHANNEL_ID = os.environ.get("TELEGRAM_CHANNELID") # Replace with your channel ID
-
+CHANNEL_ID = os.environ.get("TELEGRAM_CHANNELID")   # or "@channelusername"
 # -----------------------------------------
 
 @dataclass
@@ -39,7 +39,6 @@ class QuestionBank:
         self.items: List[QuizItem] = []
 
     def load_csv(self, path: Path) -> int:
-        """Load and parse quiz CSV file."""
         if not path.exists():
             raise FileNotFoundError(f"CSV file not found: {path}")
 
@@ -56,40 +55,52 @@ class QuestionBank:
                 if not row.get("question"):
                     continue
 
+                # Clean options
                 options = [
-                    row.get("option1", ""), row.get("option2", ""),
-                    row.get("option3", ""), row.get("option4", "")
+                    (row.get("option1") or "").strip(),
+                    (row.get("option2") or "").strip(),
+                    (row.get("option3") or "").strip(),
+                    (row.get("option4") or "").strip()
                 ]
-                options = [opt.strip() for opt in options if opt.strip()]
+                options = [opt for opt in options if opt]
 
-                # Correct answer can be either text or index
-                correct_raw = row.get("correct_answer", "").strip()
-                try:
-                    if correct_raw.isdigit():
-                        cid = int(correct_raw) - 1
-                    else:
-                        cid = options.index(correct_raw)
-                except Exception:
+                # Clean correct answer
+                correct_raw = (row.get("correct_answer") or "").strip()
+
+                cid = None
+                if correct_raw.isdigit():
+                    cid = int(correct_raw) - 1
+                elif correct_raw in options:
+                    cid = options.index(correct_raw)
+                else:
+                    logging.warning(
+                        f"Skipping question {row.get('question_no')} — "
+                        f"Correct answer '{correct_raw}' not found in options {options}"
+                    )
                     continue
 
-                if not (0 <= cid < len(options)):
+                if cid is None or not (0 <= cid < len(options)):
+                    logging.warning(
+                        f"Invalid correct_option_id for question {row.get('question_no')} "
+                        f"({correct_raw}) with options {options}"
+                    )
                     continue
 
                 self.items.append(
                     QuizItem(
-                        question_no=row.get("question_no", ""),
-                        question=row["question"].strip(),
-                        options=options,
-                        correct_option_id=cid,
-                        description=row.get("description") or None,
-                        reference=row.get("reference") or None
+                        row.get("question_no", ""),
+                        row["question"].strip(),
+                        options,
+                        cid,
+                        (row.get("description") or "").strip() or None,
+                        (row.get("reference") or "").strip() or None
                     )
                 )
         return len(self.items)
 
-# Load questions once
 QBANK = QuestionBank()
-QBANK.load_csv(CSV_PATH)
+loaded_count = QBANK.load_csv(CSV_PATH)
+logging.info(f"Loaded {loaded_count} questions from CSV")
 
 HELP_TEXT = (
     "नमस्कार! मी Bulk Quiz Bot आहे.\n\n"
@@ -114,7 +125,7 @@ async def send_quiz_batch(context: ContextTypes.DEFAULT_TYPE, chat_id: str, to_c
             try:
                 poll_question = f"{item.question_no}) {item.question}"
                 if item.reference:
-                    poll_question += f"\n({item.reference})"
+                    poll_question += f"\n{item.reference}"
 
                 await context.bot.send_poll(
                     chat_id=chat_id,
@@ -151,7 +162,7 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Remove old updates
+    # Ensure webhook is removed and old updates dropped to avoid 409 Conflict
     await application.bot.delete_webhook(drop_pending_updates=True)
 
     application.add_handler(CommandHandler("start", start))
@@ -159,6 +170,7 @@ async def main() -> None:
     application.add_handler(CommandHandler("uploadall", upload_all))
     application.add_handler(CommandHandler("uploadchannel", upload_channel))
 
+    # Prevent conflict errors by dropping any concurrent getUpdates
     await application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
