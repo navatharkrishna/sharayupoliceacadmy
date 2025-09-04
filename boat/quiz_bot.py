@@ -22,7 +22,7 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Load from GitHub Secrets
 BATCH_SIZE = 100
 DELAY_BETWEEN_POLLS = 2
 DELAY_BETWEEN_BATCHES = 10
-CHANNEL_ID = os.environ.get("TELEGRAM_CHANNELID")   # or "@channelusername"
+CHANNEL_ID = os.environ.get("TELEGRAM_CHANNELID")  # or "@channelusername"
 # -----------------------------------------
 
 @dataclass
@@ -55,7 +55,6 @@ class QuestionBank:
                 if not row.get("question"):
                     continue
 
-                # Clean options
                 options = [
                     (row.get("option1") or "").strip(),
                     (row.get("option2") or "").strip(),
@@ -64,36 +63,34 @@ class QuestionBank:
                 ]
                 options = [opt for opt in options if opt]
 
-                # Clean correct answer
                 correct_raw = (row.get("correct_answer") or "").strip()
 
+                # Default to 0 if no exact match found
                 cid = None
                 if correct_raw.isdigit():
                     cid = int(correct_raw) - 1
                 elif correct_raw in options:
                     cid = options.index(correct_raw)
                 else:
-                    logging.warning(
-                        f"Skipping question {row.get('question_no')} — "
-                        f"Correct answer '{correct_raw}' not found in options {options}"
-                    )
-                    continue
-
-                if cid is None or not (0 <= cid < len(options)):
-                    logging.warning(
-                        f"Invalid correct_option_id for question {row.get('question_no')} "
-                        f"({correct_raw}) with options {options}"
-                    )
-                    continue
+                    # Try to match with normalized strings (remove extra spaces)
+                    normalized = [opt.strip() for opt in options]
+                    if correct_raw.strip() in normalized:
+                        cid = normalized.index(correct_raw.strip())
+                    else:
+                        logging.warning(
+                            f"⚠️ Correct answer mismatch at Q{row.get('question_no')}: "
+                            f"'{correct_raw}' not in {options}. Defaulting to first option."
+                        )
+                        cid = 0  # Fallback: set first option as correct
 
                 self.items.append(
                     QuizItem(
-                        row.get("question_no", ""),
-                        row["question"].strip(),
-                        options,
-                        cid,
-                        (row.get("description") or "").strip() or None,
-                        (row.get("reference") or "").strip() or None
+                        question_no=row.get("question_no", ""),
+                        question=row["question"],
+                        options=options,
+                        correct_option_id=cid if 0 <= cid < len(options) else 0,
+                        description=row.get("description") or None,
+                        reference=row.get("reference") or None
                     )
                 )
         return len(self.items)
@@ -119,7 +116,7 @@ async def count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def send_quiz_batch(context: ContextTypes.DEFAULT_TYPE, chat_id: str, to_channel: bool = False):
     """Send quiz batch to chat or channel."""
     for start_idx in range(0, len(QBANK.items), BATCH_SIZE):
-        batch = QBANK.items[start_idx:start_idx+BATCH_SIZE]
+        batch = QBANK.items[start_idx:start_idx + BATCH_SIZE]
 
         for idx, item in enumerate(batch, 1):
             try:
@@ -138,7 +135,7 @@ async def send_quiz_batch(context: ContextTypes.DEFAULT_TYPE, chat_id: str, to_c
                 )
                 await asyncio.sleep(DELAY_BETWEEN_POLLS)
             except Exception as e:
-                logging.error(f"Failed to send question {start_idx+idx}: {e}")
+                logging.error(f"Failed to send question {start_idx + idx}: {e}")
 
         await asyncio.sleep(DELAY_BETWEEN_BATCHES)
 
@@ -162,7 +159,6 @@ async def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Ensure webhook is removed and old updates dropped to avoid 409 Conflict
     await application.bot.delete_webhook(drop_pending_updates=True)
 
     application.add_handler(CommandHandler("start", start))
@@ -170,7 +166,6 @@ async def main() -> None:
     application.add_handler(CommandHandler("uploadall", upload_all))
     application.add_handler(CommandHandler("uploadchannel", upload_channel))
 
-    # Prevent conflict errors by dropping any concurrent getUpdates
     await application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
