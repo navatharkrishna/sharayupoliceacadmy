@@ -17,12 +17,13 @@ from telegram.ext import (
 )
 
 # ---------------- CONFIG ----------------
-CSV_PATH = Path("data/quiz.csv")  # Relative path
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Load from GitHub Secrets
+CSV_PATH = Path("data/quiz.csv")
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+CHANNEL_ID = os.environ.get("TELEGRAM_CHANNELID")
 BATCH_SIZE = 100
 DELAY_BETWEEN_POLLS = 2
 DELAY_BETWEEN_BATCHES = 10
-CHANNEL_ID = os.environ.get("TELEGRAM_CHANNELID")  # e.g., "-1002796750436"
+MAX_RETRIES = 3  # Retry sending polls to avoid skipping
 # -----------------------------------------
 
 if not BOT_TOKEN:
@@ -61,42 +62,32 @@ class QuestionBank:
                 raise ValueError(f"CSV missing columns. Required: {required}. Found: {reader.fieldnames}")
 
             for row in reader:
-                if not row.get("question"):
-                    continue
+                # Even if question is empty, add a placeholder
+                question_text = (row.get("question") or "").strip()
+                if not question_text:
+                    question_text = "[MISSING QUESTION]"
 
-                options = [
-                    (row.get("option1") or "").strip(),
-                    (row.get("option2") or "").strip(),
-                    (row.get("option3") or "").strip(),
-                    (row.get("option4") or "").strip()
-                ]
-                options = [opt for opt in options if opt]
+                # Keep all 4 options (even if blank)
+                options = [(row.get(f"option{i}") or "").strip() for i in range(1, 5)]
+                if not any(options):
+                    options = ["[No Options Provided]"]
 
                 correct_raw = (row.get("correct_answer") or "").strip()
+                cid = 0  # Default to first option if mismatch
 
-                # Default to 0 if no exact match found
-                cid = None
                 if correct_raw.isdigit():
-                    cid = int(correct_raw) - 1
+                    idx = int(correct_raw) - 1
+                    if 0 <= idx < len(options):
+                        cid = idx
                 elif correct_raw in options:
                     cid = options.index(correct_raw)
-                else:
-                    normalized = [opt.strip() for opt in options]
-                    if correct_raw.strip() in normalized:
-                        cid = normalized.index(correct_raw.strip())
-                    else:
-                        logging.warning(
-                            f"⚠️ Correct answer mismatch at Q{row.get('question_no')}: "
-                            f"'{correct_raw}' not in {options}. Defaulting to first option."
-                        )
-                        cid = 0  # Fallback
 
                 self.items.append(
                     QuizItem(
                         question_no=row.get("question_no", ""),
-                        question=row["question"],
+                        question=question_text,
                         options=options,
-                        correct_option_id=cid if 0 <= cid < len(options) else 0,
+                        correct_option_id=cid,
                         description=row.get("description") or None,
                         reference=row.get("reference") or None
                     )
@@ -122,28 +113,37 @@ async def count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"📚 Total questions loaded: {len(QBANK.items)}")
 
 async def send_quiz_batch(context: ContextTypes.DEFAULT_TYPE, chat_id: str, to_channel: bool = False):
-    """Send quiz batch to chat or channel."""
+    """Send quiz batch to chat or channel without skipping any question."""
     for start_idx in range(0, len(QBANK.items), BATCH_SIZE):
         batch = QBANK.items[start_idx:start_idx + BATCH_SIZE]
 
         for idx, item in enumerate(batch, 1):
-            try:
-                poll_question = f"{item.question_no}) {item.question}"
-                if item.reference:
-                    poll_question += f"\n{item.reference}"
+            poll_question = f"{item.question_no}) {item.question}"
+            if item.reference:
+                poll_question += f"\n{item.reference}"
 
-                await context.bot.send_poll(
-                    chat_id=chat_id,
-                    question=poll_question[:300],
-                    options=item.options[:10],
-                    type="quiz",
-                    correct_option_id=item.correct_option_id,
-                    explanation=(item.description or "")[:200],
-                    is_anonymous=True  # Always anonymous for channels
-                )
-                await asyncio.sleep(DELAY_BETWEEN_POLLS)
-            except Exception as e:
-                logging.error(f"Failed to send question {start_idx + idx}: {e}")
+            sent = False
+            for attempt in range(MAX_RETRIES):
+                try:
+                    await context.bot.send_poll(
+                        chat_id=chat_id,
+                        question=poll_question[:300],
+                        options=item.options[:10],
+                        type="quiz",
+                        correct_option_id=item.correct_option_id,
+                        explanation=(item.description or "")[:200],
+                        is_anonymous=True
+                    )
+                    sent = True
+                    break
+                except Exception as e:
+                    logging.warning(f"Retry {attempt+1}/{MAX_RETRIES} for Q{item.question_no}: {e}")
+                    await asyncio.sleep(5)
+
+            if not sent:
+                logging.error(f"❌ Failed to send Q{item.question_no} after {MAX_RETRIES} retries.")
+
+            await asyncio.sleep(DELAY_BETWEEN_POLLS)
 
         await asyncio.sleep(DELAY_BETWEEN_BATCHES)
 
