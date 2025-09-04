@@ -2,7 +2,7 @@ name: Telegram Quiz Bot
 
 on:
   schedule:
-    - cron: "*/30 * * * *" # Runs every 10 minutes
+    - cron: "*/30 * * * *" # Runs every 30 minutes
   workflow_dispatch: # Allows manual start
 
 jobs:
@@ -25,7 +25,6 @@ jobs:
       - name: Run bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNELID: ${{ secrets.TELEGRAM_CHANNELID }} # <-- Added here
         run: |
           python boat/quiz_bot.py
-          
-
