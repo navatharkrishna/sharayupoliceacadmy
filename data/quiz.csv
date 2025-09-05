@@ -1,6 +1,5 @@
 question_no,question,option1,option2,option3,option4,correct_answer,description,reference
 import pandas as pd
-
 # Data for questions 26 to 50 with correct_answer as index (1..4)
 data = [
     [26,"सुरेशने एक संख्या मनात धरली. त्यात 10 मिळवले व आलेल्या बेरजेस 2 ने भागले तर उत्तर 18 आले, तर ती संख्या कोणती?","26","12","14","24",1,"18×2=36, 36−10=26","(धुळे पोलीस 2024)"],
